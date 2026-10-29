@@ -13,10 +13,12 @@ from app.services.object_detector import detect_objects
 from app.services.report_generator import generate_inspection_report
 
 
+# Logging configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+# FastAPI application
 app = FastAPI(
     title="SiteSight AI",
     description="An AI-assisted visual inspection API.",
@@ -24,19 +26,24 @@ app = FastAPI(
 )
 
 
+# CORS configuration
+# Explicitly allow the deployed Vercel frontend and local development.
 allowed_origins = [
+    "https://site-sight-ai.vercel.app",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
 
+# Allow additional frontend origins through environment configuration.
 configured_origins = os.getenv("FRONTEND_ORIGINS", "")
-allowed_origins.extend(
-    origin.strip().rstrip("/")
-    for origin in configured_origins.split(",")
-    if origin.strip()
-)
+
+for origin in configured_origins.split(","):
+    origin = origin.strip().rstrip("/")
+
+    if origin and origin not in allowed_origins:
+        allowed_origins.append(origin)
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,7 +54,8 @@ app.add_middleware(
 )
 
 
-MAX_FILE_SIZE = 10 * 1024 * 1024
+# Upload configuration
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 ALLOWED_CONTENT_TYPES = {
     "image/jpeg",
@@ -56,10 +64,12 @@ ALLOWED_CONTENT_TYPES = {
 }
 
 
+# Request models
 class ReportRequest(BaseModel):
     analysis: dict[str, Any]
 
 
+# Root endpoint
 @app.get("/")
 def root():
     return {
@@ -69,6 +79,7 @@ def root():
     }
 
 
+# Health check endpoint
 @app.get("/health")
 def health_check():
     return {
@@ -77,6 +88,7 @@ def health_check():
     }
 
 
+# Image analysis endpoint
 @app.post("/api/v1/analyze-image")
 async def analyze_image(
     file: Annotated[
@@ -124,9 +136,10 @@ async def analyze_image(
 
     except Exception as exc:
         logger.exception("Image analysis failed")
+
         raise HTTPException(
             status_code=500,
-            detail="Image analysis failed. Check the backend terminal.",
+            detail="Image analysis failed. Check the backend logs.",
         ) from exc
 
     return {
@@ -140,6 +153,7 @@ async def analyze_image(
     }
 
 
+# AI report generation endpoint
 @app.post("/api/v1/generate-report")
 async def generate_report(payload: ReportRequest):
     try:
@@ -151,13 +165,14 @@ async def generate_report(payload: ReportRequest):
         return {
             "success": True,
             "model": os.getenv(
-                "GEMINI_MODEL", "gemini-3.8-flash"
+                "GEMINI_MODEL",
+                "gemini-3.8-flash",
             ),
             "report": report,
         }
 
     except ValueError as exc:
-        # For example, the API key is missing.
+        # For example, the Gemini API key is missing.
         raise HTTPException(
             status_code=503,
             detail=str(exc),
@@ -169,7 +184,7 @@ async def generate_report(payload: ReportRequest):
         raise HTTPException(
             status_code=502,
             detail=(
-                "Report generation failed. Check the backend "
-                "terminal, API key, model availability, and quota."
+                "Report generation failed. Check the backend logs, "
+                "API key, model availability, and quota."
             ),
         ) from exc
